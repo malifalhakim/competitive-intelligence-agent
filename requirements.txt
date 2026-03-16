@@ -1,0 +1,4 @@
+docling[easyocr, rapidocr]
+pillow
+pandas
+numpy
