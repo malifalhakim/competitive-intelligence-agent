@@ -17,6 +17,9 @@ from docling.datamodel.pipeline_options import (
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.getLogger("docling").setLevel(logging.INFO)
+
 _log = logging.getLogger(__name__)
 
 def get_pipeline_options() -> ThreadedPdfPipelineOptions:
@@ -116,10 +119,7 @@ def export_results(conv_result, output_dir: Path):
     conv_result.document.save_as_markdown(md_filename, image_mode=ImageRefMode.REFERENCED)
 
 def main(input_folder: Path, output_base_dir: Path):
-    logging.basicConfig(level=logging.INFO)
-    logging.getLogger("docling").setLevel(logging.WARNING)
     _log.setLevel(logging.INFO)
-
     if not input_folder.is_dir():
         _log.error(f"Input folder not found or is not a directory: {input_folder}")
         return

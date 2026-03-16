@@ -1,6 +1,8 @@
 services:
   docling-converter:
     build: .
+    environment:
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./input:/app/input
       - ./output:/app/output
