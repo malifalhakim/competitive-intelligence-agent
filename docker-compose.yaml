@@ -1,0 +1,12 @@
+services:
+  docling-converter:
+    build: .
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+      - docling_cache:/root/.cache
+    
+    command: ["/app/input", "--output_dir", "/app/output"]
+
+volumes:
+  docling_cache:
