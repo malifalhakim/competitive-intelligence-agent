@@ -23,7 +23,7 @@ def get_pipeline_options() -> ThreadedPdfPipelineOptions:
     """Configures the PDF pipeline with OCR and table structure options."""
     pipeline_options = ThreadedPdfPipelineOptions(
         accelerator_options=AcceleratorOptions(
-            device=AcceleratorDevice.CUDA,
+            device=AcceleratorDevice.AUTO,
         ),
         ocr_batch_size=4,
         layout_batch_size=64,
