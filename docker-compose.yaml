@@ -4,8 +4,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./input:/app/input
-      - ./output:/app/output
+      - ./dataset:/app/dataset
+      - ./scratch:/app/scratch
       - docling_cache:/root/.cache
 
     deploy:
@@ -16,7 +16,7 @@ services:
               count: all
               capabilities: [gpu]
     
-    command: ["/app/input", "--output_dir", "/app/output"]
+    command: ["/app/dataset", "--output_dir", "/app/scratch"]
 
 volumes:
   docling_cache:
