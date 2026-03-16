@@ -7,6 +7,14 @@ services:
       - ./input:/app/input
       - ./output:/app/output
       - docling_cache:/root/.cache
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     
     command: ["/app/input", "--output_dir", "/app/output"]
 

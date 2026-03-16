@@ -12,7 +12,7 @@ from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.datamodel.pipeline_options import (
     TableFormerMode,
     ThreadedPdfPipelineOptions,
-    granite_picture_description,
+    smolvlm_picture_description,
     TableStructureOptions,
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -42,7 +42,7 @@ def get_pipeline_options() -> ThreadedPdfPipelineOptions:
     pipeline_options.images_scale = 2
     pipeline_options.do_picture_classification = True
     pipeline_options.do_picture_description = True
-    pipeline_options.picture_description_options = granite_picture_description
+    pipeline_options.picture_description_options = smolvlm_picture_description
     return pipeline_options
 
 def export_results(conv_result, output_dir: Path):

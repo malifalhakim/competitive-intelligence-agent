@@ -1,4 +1,4 @@
-docling[easyocr, rapidocr]
+docling[easyocr]
 pillow
 pandas
 numpy
