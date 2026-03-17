@@ -45,5 +45,19 @@ services:
     
     command: ["python", "vector_store.py", "/app/scratch", "--persist_directory", "/app/vector-db", "--initial_k", "20", "--final_k", "5"]
 
+  agent:
+    build: .
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./scratch:/app/scratch
+      - ./vector-db:/app/vector-db
+      - ./json:/app/json
+      - docling_cache:/root/.cache
+    
+    command: ["python", "agent.py", "--persist_directory", "/app/vector-db", "--output_dir", "/app/json"]
+
 volumes:
   docling_cache:

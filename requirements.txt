@@ -6,3 +6,4 @@ langchain-core
 langchain-community
 langchain-chroma
 langchain-huggingface
+langchain-groq
