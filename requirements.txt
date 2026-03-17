@@ -3,3 +3,6 @@ pillow
 pandas
 numpy
 langchain-core
+langchain-community
+langchain-chroma
+langchain-huggingface

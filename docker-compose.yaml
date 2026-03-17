@@ -3,6 +3,8 @@ services:
     build: .
     environment:
       - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
     volumes:
       - ./dataset:/app/dataset
       - ./scratch:/app/scratch
@@ -22,11 +24,26 @@ services:
     build: .
     environment:
       - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
     volumes:
       - ./scratch:/app/scratch
       - docling_cache:/root/.cache
     
-    command: ["python", "create_chunks.py", "/app/scratch/4x-strategy.json", "--output_json", "/app/scratch/langchain_chunks.json"]
+    command: ["python", "create_chunks.py", "/app/scratch", "--output_json", "/app/langchain_chunks.json"]
+  
+  vector-store:
+    build: .
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./scratch:/app/scratch
+      - ./vector-db:/app/vector-db
+      - docling_cache:/root/.cache
+    
+    command: ["python", "vector_store.py", "/app/scratch", "--persist_directory", "/app/vector-db", "--initial_k", "20", "--final_k", "5"]
 
 volumes:
   docling_cache:

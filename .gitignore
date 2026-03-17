@@ -1,2 +1,4 @@
 scratch
 .vscode
+vector-db
+.env
