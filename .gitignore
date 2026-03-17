@@ -4,3 +4,4 @@ vector-db
 .env
 json
 __pycache__
+database.db

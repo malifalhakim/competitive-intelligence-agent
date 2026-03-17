@@ -18,3 +18,5 @@ COPY document_converter.py .
 COPY create_chunks.py .
 COPY vector_store.py .
 COPY agent.py .
+COPY init_db.py .
+COPY api.py .

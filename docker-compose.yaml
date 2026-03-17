@@ -67,7 +67,7 @@ services:
       - .env
     volumes:
       - ./json:/app/json
-      - ./database.db:/app/database.db
+      - .:/app
     command: ["python", "init_db.py", "--json", "/app/json/competitor_intelligence.json", "--db", "/app/database.db"]
 
   api:
@@ -75,7 +75,8 @@ services:
     env_file:
       - .env
     volumes:
-      - ./database.db:/app/database.db
+      - ./json:/app/json
+      - .:/app
     ports:
       - "8000:8000"
     command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

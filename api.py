@@ -1,19 +1,41 @@
+import re
 import os
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from langchain_community.utilities import SQLDatabase
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_classic.chains import create_sql_query_chain
-from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
+from langchain_community.tools import QuerySQLDataBaseTool
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 app = FastAPI(title="Competitive Intelligence Q&A API")
 
 MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
 
+def extract_sql(response: str) -> str:
+    """Extracts only the SQL query from the LLM response."""
+    response = response.strip()
+    
+    sql_match = re.search(r"```(?:sql)?\s+(.*?)\s+```", response, re.DOTALL | re.IGNORECASE)
+    if sql_match:
+        return sql_match.group(1).strip()
+    
+    clean_query = re.sub(r"^(SQLQuery|Question):", "", response, flags=re.IGNORECASE).strip()
+   
+    if "SELECT" in clean_query.upper():
+        select_match = re.search(r"(SELECT .*?;?)", clean_query, re.DOTALL | re.IGNORECASE)
+        if select_match:
+            return select_match.group(1).strip()
+            
+    return clean_query
+
 def setup_chain():
+    """
+    Setup the LangChain chain for the Q&A system.
+    """
     groq_api_key = os.environ.get("GROQ_API_KEY")
     if not groq_api_key:
         raise ValueError("Missing Groq API Key (GROQ_API_KEY)")
@@ -22,7 +44,7 @@ def setup_chain():
 
     llm = ChatGroq(model=MODEL_NAME, api_key=groq_api_key, temperature=0.1)
 
-    write_query = create_sql_query_chain(llm, db)
+    write_query = create_sql_query_chain(llm, db) | RunnableLambda(extract_sql)
     execute_query = QuerySQLDataBaseTool(db=db)
 
     answer_prompt = PromptTemplate.from_template(
@@ -34,6 +56,7 @@ def setup_chain():
 
     Answer:"""
     )
+
     full_chain = (
         RunnablePassthrough.assign(query=write_query)
         | RunnablePassthrough.assign(result=lambda x: execute_query.invoke({"query": x["query"]}))
