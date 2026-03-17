@@ -28,9 +28,9 @@ def get_pipeline_options() -> ThreadedPdfPipelineOptions:
         accelerator_options=AcceleratorOptions(
             device=AcceleratorDevice.AUTO,
         ),
-        ocr_batch_size=4,
-        layout_batch_size=64,
-        table_batch_size=4,
+        ocr_batch_size=2,
+        layout_batch_size=16,
+        table_batch_size=2,
     )
     pipeline_options.do_ocr = True
     pipeline_options.do_table_structure = True
@@ -111,8 +111,7 @@ def main(input_folder: Path, output_base_dir: Path):
             except Exception:
                 pass
 
-            doc_output_dir = output_base_dir / pdf_path.stem
-            export_results(conv_result, doc_output_dir)
+            export_results(conv_result, output_base_dir)
             
         except Exception as e:
             pipeline_runtime = time.time() - start_time
