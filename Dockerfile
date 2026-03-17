@@ -15,5 +15,4 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 COPY document_converter.py .
-
-ENTRYPOINT ["python", "document_converter.py"]
+COPY create_chunks.py .

@@ -16,7 +16,17 @@ services:
               count: all
               capabilities: [gpu]
     
-    command: ["/app/dataset", "--output_dir", "/app/scratch"]
+    command: ["python", "document_converter.py", "/app/dataset", "--output_dir", "/app/scratch"]
+
+  langchain-chunker:
+    build: .
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./scratch:/app/scratch
+      - docling_cache:/root/.cache
+    
+    command: ["python", "create_chunks.py", "/app/scratch/4x-strategy.json", "--output_json", "/app/scratch/langchain_chunks.json"]
 
 volumes:
   docling_cache:

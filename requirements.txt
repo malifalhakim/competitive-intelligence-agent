@@ -2,3 +2,4 @@ docling[easyocr]
 pillow
 pandas
 numpy
+langchain-core
