@@ -29,7 +29,7 @@ def load_docling_json_to_langchain(json_path: Path) -> List[Document]:
     for chunk in doc_chunks:
         metadata = {
             "source_filename": doc.name,
-            "headings": chunk.meta.headings if chunk.meta.headings else [],
+            "headings": " > ".join(chunk.meta.headings) if chunk.meta.headings else "",
         }
         
         # --- Add media properties ---
@@ -71,11 +71,11 @@ def load_docling_json_to_langchain(json_path: Path) -> List[Document]:
                         except Exception:
                             pass
                             
-            metadata["element_types"] = list(element_types)
+            metadata["element_types"] = ", ".join(element_types) if element_types else ""
             if pictures:
-                metadata["pictures"] = pictures
+                metadata["pictures"] = json.dumps(pictures)
             if tables:
-                metadata["tables_html"] = tables
+                metadata["tables_html"] = json.dumps(tables)
 
         lc_doc = Document(
             page_content=chunk.text,
@@ -85,15 +85,25 @@ def load_docling_json_to_langchain(json_path: Path) -> List[Document]:
         
     return langchain_docs
 
+def load_chunk_database(json_paths: List[Path]) -> List[Document]:
+    """
+    Loads LangChain Documents from a list of previously saved JSON files.
+    """
+    documents = []
+    for json_path in json_paths:
+        documents.extend(load_docling_json_to_langchain(json_path))
+    return documents
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test Docling JSON to Langchain Chunks")
-    parser.add_argument("json_path", type=Path, help="Path to the JSON file to chunk.")
+    parser.add_argument("json_paths_folder", type=Path, help="Folder containing Docling JSON files.")
     parser.add_argument("--output_json", type=Path, help="Optional path to save the resulting LangChain chunks as JSON.")
     
     args = parser.parse_args()
     
     try:
-        chunks = load_docling_json_to_langchain(args.json_path)
+        json_paths = [Path(f) for f in args.json_paths_folder.glob("*.json")]
+        chunks = load_chunk_database(json_paths)
         if args.output_json:
             print(f"Saving {len(chunks)} chunks to {args.output_json}...")
             chunks_data = [{"page_content": c.page_content, "metadata": c.metadata} for c in chunks]
