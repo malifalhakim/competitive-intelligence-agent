@@ -58,6 +58,27 @@ services:
       - docling_cache:/root/.cache
     
     command: ["python", "agent.py", "--persist_directory", "/app/vector-db", "--output_dir", "/app/json"]
+  
+  init_db:
+    build: .
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./json:/app/json
+      - ./database.db:/app/database.db
+    command: ["python", "init_db.py", "--json", "/app/json/competitor_intelligence.json", "--db", "/app/database.db"]
+
+  api:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./database.db:/app/database.db
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
 
 volumes:
   docling_cache:
