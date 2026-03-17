@@ -13,28 +13,28 @@ from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 
 from vector_store import get_vector_store, build_retriever
 
+MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 class CompetitorInfo(BaseModel):
     name: str = Field(description="The name of the competitor company or product.")
-    features: List[str] = Field(description="A list of core features or capabilities offered by this competitor.")
-    price: Optional[str] = Field(description="Details regarding the pricing, cost, or monetization model of the competitor.")
-    strengths: List[str] = Field(description="Key strengths, advantages, or unique selling propositions (USPs).")
-    weaknesses: List[str] = Field(description="Key weaknesses, limitations, or vulnerabilities (SWOT).")
+    features: List[str] = Field(description="A list of specific gameplay features, mechanics, or capabilities. If none found, return an empty array [].")
+    price: Optional[float] = Field(description="The numeric price of the game. If it is free to play, output 0.0. If unknown, output null.")
+    strengths: List[str] = Field(description="Key strengths, advantages, or unique selling points. If none found, return an empty array []. Do NOT return a string.")
+    weaknesses: List[str] = Field(description="Key weaknesses, flaws, or limitations. If none found, return an empty array []. Do NOT return a string like 'None'.")
 
 class InitialDiscoveryList(BaseModel):
     competitors: List[str] = Field(description="A comprehensive list of all competitor names found in the context.")
 
 
 def get_llm():
-    """Initializes the Qwen3-32B model via Groq API."""
+    """Initializes the model via Groq API."""
     groq_api_key = os.environ.get("GROQ_API_KEY")
     if not groq_api_key:
         raise ValueError("Missing Groq API Key (GROQ_API_KEY)")
         
     llm = ChatGroq(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model=MODEL_NAME,
         api_key=groq_api_key,
-        max_tokens=8192,
     )
 
     return llm
@@ -84,32 +84,45 @@ def extract_competitor_intelligence(persist_directory: Path):
     retriever = build_retriever(vector_store=store, initial_k=20, final_k=5)
     llm = get_llm()
     
-
     print("\nExecuting Stage 1: Competitor Discovery...")
-    discovery_query = "List all product names mentioned in the documents"
-    discovery_docs = retriever.invoke(discovery_query)
+    discovery_retriever = build_retriever(vector_store=store, initial_k=50, final_k=50)
+    
+    discovery_query = "game titles, game names, competitor games, mobile games, games"
+    discovery_docs = discovery_retriever.invoke(discovery_query)
     
     discovery_parser = PydanticOutputParser(pydantic_object=InitialDiscoveryList)
+    all_games = set()
     
-    discovery_content = format_context_for_multimodal(discovery_docs)
-    discovery_content.append({"type": "text", "text": f"\n\nBased ONLY on the context above, answer the query: '{discovery_query}'.\n\n{discovery_parser.get_format_instructions()}"})
+    for i, doc in enumerate(discovery_docs):
+        print(f"  Scanning chunk {i+1}/{len(discovery_docs)}...")
+        
+        chunk_content = format_context_for_multimodal([doc])
+        chunk_content.append({
+            "type": "text",
+            "text": (
+                "\n\nExtract ALL specific game titles (mobile, PC, or console) mentioned in the text above. "
+                "Only include actual game names, NOT company/publisher names. "
+                "If no game titles are found, return an empty list.\n\n"
+                f"{discovery_parser.get_format_instructions()}"
+            )
+        })
+        
+        messages = [
+            SystemMessage(content="You are a game title extractor. Return ONLY game names found in the text. If none exist, return an empty competitors list."),
+            HumanMessage(content=chunk_content)
+        ]
+        
+        try:
+            response = llm.invoke(messages)
+            chunk_games = discovery_parser.parse(response.content).competitors
+            if chunk_games:
+                print(f"    Found: {chunk_games}")
+                all_games.update(chunk_games)
+        except Exception:
+            pass
     
-    messages = [
-        SystemMessage(content="You are an expert competitive intelligence analyst. Extract information accurately and follow the JSON format instructions perfectly."),
-        HumanMessage(content=discovery_content)
-    ]
-
-    print(messages)
-    
-    discovery_response = llm.invoke(messages)
-    try:
-        clean_response = discovery_response.content
-        competitor_list = discovery_parser.parse(clean_response).competitors
-        print(f"Competitors Discovered: {competitor_list}")
-    except Exception as e:
-        print(f"Parsing failed for Discovery Stage. Raw output:\n{discovery_response.content}")
-        return []
-
+    competitor_list = sorted(all_games)
+    print(f"\nAll Competitors Discovered: {competitor_list} ({len(competitor_list)} total)")
 
     final_intelligence = []
     
@@ -119,10 +132,10 @@ def extract_competitor_intelligence(persist_directory: Path):
         gathered_data = {}
         
         queries = {
-            "features": f"What are the core features, genres, or capabilities of the competitor '{comp}'?",
-            "price": f"What is the pricing, cost, or monetization model of the competitor '{comp}'?",
-            "strengths": f"What are the key strengths and advantages of the competitor '{comp}'?",
-            "weaknesses": f"What are the weaknesses or limitations of the competitor '{comp}'?"
+            "features": f"What specific gameplay features or mechanics does the game '{comp}' have?",
+            "price": f"How much does the game '{comp}' cost to play or purchase? Looking for a specific number.",
+            "strengths": f"What are the main advantages or standout strengths of the game '{comp}' compared to others?",
+            "weaknesses": f"What are the known flaws, weaknesses, or limitations of the game '{comp}'?"
         }
         
         for attr, query in queries.items():
@@ -144,7 +157,13 @@ def extract_competitor_intelligence(persist_directory: Path):
         synth_parser = PydanticOutputParser(pydantic_object=CompetitorInfo)
         
         synth_prompt = f"""
-        You are a JSON formatting bot. Convert the following unstructured research about '{comp}' into the requested JSON schema.
+        You are a JSON formatting bot. Convert the following unstructured research about the game '{comp}' into the requested JSON schema.
+        
+        CRITICAL RULES:
+        1. "features", "strengths", and "weaknesses" MUST be an array of strings. 
+        2. If you cannot find any information for a list category, you MUST output an empty array []. Do NOT output strings like "None" or "No information".
+        3. "price" MUST be a floating-point number (e.g. 0.0 for free, 9.99 for paid). If unknown, output null.
+        4. "features" MUST NOT include any game genres (like RPG, MOBA, Battle Royale).
         
         RESEARCH:
         Features: {gathered_data['features']}
@@ -169,7 +188,6 @@ def extract_competitor_intelligence(persist_directory: Path):
 
 
 if __name__ == "__main__":
-    import datetime
     parser = argparse.ArgumentParser(description="Run Multi-Stage LLM Extraction Agent")
     parser.add_argument("--persist_directory", type=Path, default=Path("vector-db"), help="Directory containing the Chroma database.")
     parser.add_argument("--output_dir", type=Path, default=Path("json"), help="Directory to save the JSON results.")
@@ -188,8 +206,7 @@ if __name__ == "__main__":
         print(json.dumps(r, indent=2))
     
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = args.output_dir / f"competitor_intelligence_{timestamp}.json"
+    output_path = args.output_dir / f"competitor_intelligence.json"
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     print(f"\nResults saved to {output_path}")
