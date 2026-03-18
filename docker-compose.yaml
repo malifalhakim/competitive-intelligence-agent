@@ -33,7 +33,7 @@ services:
     
     command: ["python", "vector_store.py", "/app/scratch", "--persist_directory", "/app/vector-db", "--initial_k", "20", "--final_k", "5"]
     depends_on:
-      previous-service:
+      docling-converter:
         condition: service_completed_successfully
 
   agent:
@@ -50,7 +50,7 @@ services:
     
     command: ["python", "agent.py", "--persist_directory", "/app/vector-db", "--output_dir", "/app/json"]
     depends_on:
-      previous-service:
+      vector-store:
         condition: service_completed_successfully
   
   init_db:
@@ -64,7 +64,7 @@ services:
       - .:/app
     command: ["python", "init_db.py", "--json", "/app/json/competitor_intelligence.json", "--db", "/app/database.db"]
     depends_on:
-      previous-service:
+      agent:
         condition: service_completed_successfully
 
   api:
@@ -78,7 +78,7 @@ services:
       - "8000:8000"
     command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
-      previous-service:
+      init_db:
         condition: service_completed_successfully
 
 volumes:
