@@ -125,7 +125,6 @@ This will automatically trigger:
 - **Query Validation**: All generated SQL is parsed to ensure it begins with `SELECT`.
 - **Keyword Blacklisting**: Queries containing destructive keywords (e.g., `DROP`, `DELETE`, `UPDATE`) are rejected before execution.
 
-## Limitations
 
 ## Limitations
 
