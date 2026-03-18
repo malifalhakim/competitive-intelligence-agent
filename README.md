@@ -1,89 +1,136 @@
 # Competitor Intelligence Agent
 
-A multi-stage LLM-powered system designed to extract deep competitive intelligence from game-related PDF documents. This project uses multi-modal extraction (text + tables + images) and provides a Natural Language to SQL interface for querying synthesized results.
+A multi-stage intelligence pipeline designed to extract, structure, and query competitive data from unstructured game documents (PDFs). The system transforms raw documentation into a searchable relational database and provides a natural language interface for complex analytical queries.
 
-## 🏗️ System Architecture
+## System Architecture
 
-The system follows a modular pipeline to ensure high recall and structured data integrity:
+The project implements a decoupled, event-driven architecture organized into two primary phases: the **ETL Pipeline** and the **Interactive Query Layer**.
 
-1.  **Ingestion & Conversion**: Uses **Docling** to parse complex PDFs into structured JSON hierarchies, capturing text, tables (as HTML), and images (as Base64).
-2.  **Chunking & Vectorization**: Chunks documents into semantic sections and stores them in **ChromaDB** using HuggingFace embeddings.
-3.  **Collaborative Extraction (Agent)**:
-    *   **Stage 1 (Discovery)**: Scans chunks iteratively to identify all game titles mentioned.
-    *   **Stage 2-5 (deep Analysis)**: For each game, the agent performs specific retrieval-augmented generation (RAG) queries to extract Features, Pricing, Strengths, and Weaknesses.
-4.  **Relational Synthesis**: Extracted JSON results are seeded into a **SQLite** database for structured analysis.
-5.  **Interactive Q&A API**: A **FastAPI** backend that uses **LangChain's Text-to-SQL** capabilities to allow users to query the data in natural language.
+### Architecture Overview
 
-## 🚀 How to Run with Docker
+```mermaid
+graph TD
+    subgraph "Phase 1: ETL Pipeline (Data Ingestion)"
+        A[Raw PDF Documents] -->|Docling OCR/Layout| B(Structured JSON Scratchpad)
+        B -->|Chunking & Embedding| C[(ChromaDB Vector Store)]
+        C -->|Multi-stage RAG Extraction| D{Intelligence Agent}
+        D -->|Structured Intelligence| E[competitor_intelligence.json]
+        E -->|Schema Mapping| F[(SQLite Relational DB)]
+    end
 
-### 1. Prerequisites
-Create a `.env` file in the root directory:
-```env
-HUGGINGFACEHUB_API_TOKEN=your_hf_token
-GROQ_API_KEY=your_groq_key
-JINA_API_KEY=your_jina_key (if using reranker)
+    subgraph "Phase 2: Interactive Query Layer (API)"
+        G[User Question] -->|Natural Language| H[FastAPI Service]
+        H -->|Prompt Engineering| I[LLM SQL Generator]
+        I -->|Validated SELECT Query| J[(SQLite Relational DB)]
+        J -->|Raw Data Results| K[LLM Response Synthesizer]
+        K -->|Natural Language Answer| L[User Response]
+    end
 ```
 
-### 2. Full Pipeline Execution
-The process is designed as a sequential pipeline:
+### Detailed Component Breakdown
+
+#### 1. Document Transformation (`document_converter.py`)
+Utilizes the **Docling** framework to process PDF documents. This component performs:
+- **OCR & Layout Analysis**: Extracting text while preserving document structure.
+- **Table Extraction**: Converting complex document tables into structured markdown for better LLM context.
+- **Image Metadata**: Capturing visual elements for potential multimodal analysis.
+
+#### 2. Vectorization & Retrieval (`vector_store.py`)
+Processed documents are chunked and stored in **ChromaDB**. 
+- **Embeddings**: Employs `BAAI/bge-large-en-v1.5` for high-dimensional text representation.
+- **Reranking**: Uses `Jina Reranker v2` (multilingual) in a dual-stage retrieval process to refine context relevance before LLM analysis.
+
+#### 3. Intelligence Extraction Agent (`agent.py`)
+A specialized agent powered by **Llama-4-Scout (17B)** that operates in three distinct stages:
+- **Discovery**: Scans the vector space to identify unique competitor names and entities.
+- **Attribute Analysis**: For each identified competitor, the agent performs targeted retrieval to find gameplay features, pricing, strengths, and weaknesses.
+- **Synthesis**: Merges disparate research findings into a normalized JSON schema.
+
+#### 4. Relational Normalization (`init_db.py`)
+The unstructured extraction results are mapped to a normalized SQL schema. This allows for precise analytical queries (e.g., "Compare the pricing of all RPG games") that are often difficult for standard RAG systems to execute with consistent structural integrity.
+
+#### 5. Secure Q&A API (`api.py`)
+A **FastAPI** interface that translates natural language to SQL.
+- **SQL Translation**: Llama-4 generates ANSI SQL based on the database schema.
+- **Security Validation**: The system enforces a strict **read-only** execution environment. Queries are validated to ensure only `SELECT` statements are executed, with a blacklist for destructive keywords (e.g., `DROP`, `DELETE`).
+- **Response Synthesis**: Query results are converted back into concise natural language summaries.
+
+## Technology Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| **LLM Inference** | Groq (Llama-4-Scout-17B) |
+| **Document Processing** | Docling (IBM) |
+| **Vector Database** | ChromaDB |
+| **Relational Database** | SQLite |
+| **Orchestration** | LangChain |
+| **API Framework** | FastAPI + Uvicorn |
+| **Embeddings/Reranking** | Hugging Face (BGE) & Jina AI |
+| **Containerization** | Docker & Docker Compose |
+
+## Getting Started
+
+### Prerequisites
+- Docker and Docker Compose
+- API Keys for: **Groq**, **Hugging Face**, and **Jina AI**
+
+### Installation
+1. Clone the repository.
+2. Create a `.env` file based on `.env.example`:
+   ```env
+   GROQ_API_KEY=your_key
+   HUGGINGFACEHUB_API_TOKEN=your_key
+   JINA_API_KEY=your_key
+   ```
+3. Place your raw PDF documents in the `./dataset` directory.
+
+### Running the Pipeline
+The system is orchestrated via Docker Compose. Run all services sequentially:
 
 ```bash
-# Step 1: Convert PDFs in /dataset to structured JSON
-docker compose run --rm docling-converter
-
-# Step 2: Create semantic chunks for LangChain
-docker compose run --rm langchain-chunker
-
-# Step 3: Populate the Chroma database
-docker compose run --rm vector-store
-
-# Step 4: Run the Extraction Agent (This takes time/LLM calls)
-docker compose run --rm agent
-
-# Step 5: Seed the SQLite database
-docker compose run --rm init_db
-
-# Step 6: Start the Q&A API
-docker compose up -d api
+docker-compose up
 ```
 
-## 📥 Input & Output Example
+This will automatically trigger:
+1. `docling-converter`: PDF to JSON transformation.
+2. `vector-store`: Ingestion into ChromaDB.
+3. `agent`: Intelligence extraction.
+4. `init_db`: SQLite population.
+5. `api`: Starts the web server on `http://localhost:8000`.
 
-### Input
-A PDF market report (e.g., *State of Mobile Games in SEA 2024*) containing charts, game lists, and revenue tables.
+## API Usage
 
-### Output
-The `agent` produces a `json/competitor_intelligence.json`:
+### Example Query
+**Endpoint**: `POST /query`  
+
+**Request Payload**:
 ```json
 {
-  "name": "Seven Knights Idle Adventure",
-  "features": ["Character collection", "Auto-battle mechanics"],
-  "price": 0.0,
-  "strengths": ["Rapid revenue growth in first 3 months", "Strong IP leverage"],
-  "weaknesses": ["Heavily reliant on the Korean market"]
+  "question": "What are the games from competitors"
 }
 ```
 
-### Interactive Query
-**Request**: `POST /query` with `{"question": "Show me free games with strong IP?"}`
-**Response**:
+**Example Response**:
 ```json
 {
-  "answer": "Seven Knights Idle Adventure is a free-to-play game (0.0 cost) that leverages its strong Seven Knights IP to drive growth.",
-  "sql_query": "SELECT name FROM Competitors JOIN Strengths ON ... WHERE price = 0.0 AND strength_text LIKE '%IP%'"
+  "question": "What are the games from competitors",
+  "sql_query": "SELECT name FROM Competitors;",
+  "sql_result": "[('Call of Duty: Mobile',), ('Dream Games',), ('Honor of Kings',), ('Roblox',), ('MONOPOLY GO!',), ('Mobile Legends: Bang Bang',)]",
+  "answer": "The identified competitor games (and developers) include Call of Duty: Mobile, Dream Games, Honor of Kings, Roblox, MONOPOLY GO!, and Mobile Legends: Bang Bang."
 }
 ```
 
-## ⚠️ Limitations
+### Security Measures
+- **Read-Only Access**: The SQLite connection string utilizes `mode=ro` to prevent write operations.
+- **Query Validation**: All generated SQL is parsed to ensure it begins with `SELECT`.
+- **Keyword Blacklisting**: Queries containing destructive keywords (e.g., `DROP`, `DELETE`, `UPDATE`) are rejected before execution.
 
-*   **Groq Rate Limits**: The iterative extraction agent makes many sequential calls. Ensure your Groq API tier allows for high RPM (Requests Per Minute).
-*   **Context Window**: Extremely long documents with 100+ games may exceed the discovery stage's retrieval window (currently tuned to 50 chunks).
-*   **SQL Generation**: While guarded by regex extraction, LLM-generated SQL can occasionally fail if the natural language question is ambiguous or uses column names not present in the schema.
-*   **Data Integrity**: Features are extracted based *only* on the provided documents. If a document doesn't mention a price, the field will be `null`.
+## Limitations
 
-## 🛠️ Tech Stack
-*   **LLM**: Llama 3/4 via Groq
-*   **Orchestration**: LangChain (LCEL)
-*   **Database**: ChromaDB (Vector) & SQLite (Relational)
-*   **Parsing**: IBM Docling
-*   **API**: FastAPI & Uvicorn
+## Limitations
+
+- **API Rate Limits**: Subject to free-tier quotas for Groq, Hugging Face, and Jina AI; high-frequency requests may trigger rate limiting.
+- **Model Performance**: Open-source models like Llama-4-Scout may have smaller context windows and higher analytical variance compared to larger proprietary models.
+- **Hardware**: Docling requires an **NVIDIA GPU** for acceptable performance; CPU-only execution is significantly slower.
+- **Source Quality**: Extraction accuracy is dependent on document layout quality and scan clarity.
+- **Static Schema**: The relational database uses a fixed schema; adding new intelligence categories requires code and prompt modifications.
