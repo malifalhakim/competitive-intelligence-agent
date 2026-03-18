@@ -32,17 +32,21 @@ def get_pipeline_options() -> ThreadedPdfPipelineOptions:
         layout_batch_size=16,
         table_batch_size=2,
     )
+
     pipeline_options.do_ocr = True
+    pipeline_options.ocr_options.lang = ["en"]
+
     pipeline_options.do_table_structure = True
     pipeline_options.table_structure_options = TableStructureOptions(
         mode=TableFormerMode.ACCURATE, do_cell_matching=True
     )
-    pipeline_options.ocr_options.lang = ["en"]
+    
     pipeline_options.generate_picture_images = True
     pipeline_options.images_scale = 2
     pipeline_options.do_picture_classification = True
     pipeline_options.do_picture_description = True
     pipeline_options.picture_description_options = smolvlm_picture_description
+    
     return pipeline_options
 
 def export_results(conv_result, output_dir: Path):

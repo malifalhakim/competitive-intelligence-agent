@@ -1,8 +1,7 @@
-import json
 import os
 import argparse
+import logging
 from pathlib import Path
-from typing import List
 
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
@@ -11,6 +10,10 @@ from langchain_classic.retrievers.contextual_compression import ContextualCompre
 from langchain_community.document_compressors import JinaRerank
 
 from create_chunks import load_chunk_database
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+_log = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
 RERANKER_MODEL = "jina-reranker-v2-base-multilingual"
@@ -26,6 +29,7 @@ def get_vector_store(
     
     hf_api_key = hf_api_key or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
     if not hf_api_key:
+        _log.error("Missing Hugging Face API Token (HUGGINGFACEHUB_API_TOKEN)")
         raise ValueError("Missing Hugging Face API Token (HUGGINGFACEHUB_API_TOKEN)")
 
     embeddings = HuggingFaceEndpointEmbeddings(
@@ -54,6 +58,7 @@ def build_retriever(
     """
     jina_api_key = jina_api_key or os.environ.get("JINA_API_KEY")
     if not jina_api_key:
+         _log.error("Missing Jina API Key (JINA_API_KEY)")
          raise ValueError("Missing Jina API Key (JINA_API_KEY)")
          
     base_retriever = vector_store.as_retriever(search_kwargs={"k": initial_k})
@@ -72,18 +77,26 @@ def build_retriever(
     return compression_retriever
 
 def main(folder: Path, persist_directory: Path):
-    print("Connecting to Vector Store (Chroma)...")
+    _log.info("Connecting to Vector Store (Chroma)...")
     store = get_vector_store(persist_directory=str(persist_directory))
     
     existing_ids = store.get()["ids"]
     if len(existing_ids) == 0:
-        print(f"Chroma is empty. Loading and ingesting documents from {folder}...")
-        docs = load_chunk_database([p for p in folder.glob("*.json")])
-        print(f"Injecting {len(docs)} documents into Chroma...")
-        store.add_documents(docs)
-        print("Injection complete!")
+        _log.info(f"Chroma is empty. Loading and ingesting documents from {folder}...")
+        json_files = list(folder.glob("*.json"))
+        if not json_files:
+            _log.warning(f"No JSON files found in {folder}")
+            return store
+
+        docs = load_chunk_database(json_files)
+        if docs:
+            _log.info(f"Injecting {len(docs)} documents into Chroma...")
+            store.add_documents(docs)
+            _log.info("Injection complete!")
+        else:
+            _log.warning("No documents to inject.")
     else:
-        print(f"Chroma already contains {len(existing_ids)} documents. Skipping injection.")
+        _log.info(f"Chroma already contains {len(existing_ids)} documents. Skipping injection.")
 
     return store
 
@@ -98,19 +111,22 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    store = main(args.folder, args.persist_directory)
-    
-    if args.query:
-        print(f"Executing Dual-Stage Search for query: '{args.query}'...")
-        retriever = build_retriever(vector_store=store, initial_k=args.initial_k, final_k=args.final_k)
+    try:
+        store = main(args.folder, args.persist_directory)
         
-        final_docs = retriever.invoke(args.query)
-    
-        print(f"Reranking Complete! Top {len(final_docs)} perfectly aligned chunks:")
-        print("-" * 50)
-        for i, doc in enumerate(final_docs, 1):
-            print(f"Result #{i} | Page {doc.metadata.get('page_number', '?')} | Headings: {doc.metadata.get('headings', [])}")
-            print(f"Snippet: {doc.page_content[:150]}...")
-            if doc.metadata.get('element_types'):
-                print(f"Elements: {doc.metadata.get('element_types')}")
+        if args.query:
+            _log.info(f"Executing Dual-Stage Search for query: '{args.query}'...")
+            retriever = build_retriever(vector_store=store, initial_k=args.initial_k, final_k=args.final_k)
+            
+            final_docs = retriever.invoke(args.query)
+        
+            _log.info(f"Reranking Complete! Top {len(final_docs)} perfectly aligned chunks:")
             print("-" * 50)
+            for i, doc in enumerate(final_docs, 1):
+                print(f"Result #{i} | Page {doc.metadata.get('page_number', '?')} | Headings: {doc.metadata.get('headings', [])}")
+                print(f"Snippet: {doc.page_content[:150]}...")
+                if doc.metadata.get('element_types'):
+                    print(f"Elements: {doc.metadata.get('element_types')}")
+                print("-" * 50)
+    except Exception as e:
+        _log.error(f"An error occurred: {e}", exc_info=True)
