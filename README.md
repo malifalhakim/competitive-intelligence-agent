@@ -9,20 +9,20 @@ The project implements a decoupled, event-driven architecture organized into two
 ### Architecture Overview
 
 ```mermaid
-graph TD
+graph LR
     subgraph "Phase 1: ETL Pipeline (Data Ingestion)"
         A[Raw PDF Documents] -->|Docling OCR/Layout| B(Structured JSON Scratchpad)
         B -->|Chunking & Embedding| C[(ChromaDB Vector Store)]
         C -->|Multi-stage RAG Extraction| D{Intelligence Agent}
         D -->|Structured Intelligence| E[competitor_intelligence.json]
-        E -->|Schema Mapping| F[(SQLite Relational DB)]
+        E -->|Schema Mapping| DB[(SQLite Relational DB)]
     end
 
     subgraph "Phase 2: Interactive Query Layer (API)"
         G[User Question] -->|Natural Language| H[FastAPI Service]
         H -->|Prompt Engineering| I[LLM SQL Generator]
-        I -->|Validated SELECT Query| J[(SQLite Relational DB)]
-        J -->|Raw Data Results| K[LLM Response Synthesizer]
+        I -->|Validated SELECT Query| DB
+        DB -->|Raw Data Results| K[LLM Response Synthesizer]
         K -->|Natural Language Answer| L[User Response]
     end
 ```
